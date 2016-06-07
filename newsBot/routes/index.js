@@ -24,8 +24,12 @@ router.post('/webhook/', function (req, res) {
       text = event.message.text;
       // Handle a text message from this sender
       getArticles(function(err, articles) {
-      		sendTextMessage(sender, articles[0])
-      })
+		if (err) {
+			console.log(err);
+		} else {
+			sendTextMessage(sender, articles[0])
+		}
+	})
     }
   }
   res.sendStatus(200);
