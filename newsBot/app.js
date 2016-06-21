@@ -23,7 +23,7 @@ app.set('view engine', 'jade');
 
 mongoose.connect('mongodb://localhost/test');
 
-var j = schedule.scheduleJob('29 * * * *', function(){
+var j = schedule.scheduleJob('* 9 * * *', function(){
 
     User.find({}, function(err, users) {
         if (users != null) {
