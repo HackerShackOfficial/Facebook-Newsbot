@@ -3,6 +3,9 @@ var request = require('request');
 var rssReader = require('feed-read');
 var properties = require('../config/properties.js')
 
+// if our user.js file is at app/models/user.js
+var User = require('../model/user');
+
 exports.tokenVerification = function(req, res) {
 	if (req.query['hub.verify_token'] === properties.facebook_challenge) {
     res.send(req.query['hub.challenge']);
@@ -18,20 +21,87 @@ exports.handleMessage = function(req, res) {
 		sender = event.sender.id;
 		if (event.message && event.message.text) {
 		  	text = event.message.text;
+
+        normalizedText = text.toLowerCase().replace(' ', '');
+
 		  	// Handle a text message from this sender
-		  	getArticles(function(err, articles) {
-				if (err) {
-					console.log(err);
-				} else {
-					sendTextMessage(sender, articles[0])
-				}
-			})
-		}
-	}
+        switch(normalizedText) {
+          case "/subscribe":
+            subscribeUser(sender)
+            break;
+          case "/unsubscribe":
+            unsubscribeUser(sender)
+            break;
+          case "/subscribestatus":
+            subscribeStatus(sender)
+            break;
+          default:
+            getArticles(function(err, articles) {
+              if (err) {
+                console.log(err);
+              }
+              else if (normalizedText == "showmore") {
+                maxArticles = Math.min(articles.length, 5);
+                for (var i=0; i<maxArticles; i++) {
+                  sendArticleMessage(sender, articles[i])
+                }
+              } else {
+                sendArticleMessage(sender, articles[0])
+              }
+            })
+            
+            break;
+        }
+  		}
+    }
 	res.sendStatus(200);
 }
 
-function getArticles(callback) {
+function subscribeUser(id) {
+  // create a new user called chris
+  var newUser = new User({
+    fb_id: id,
+  });
+
+  // call the built-in save method to save to the database
+  User.findOneAndUpdate({fb_id: newUser.fb_id}, {fb_id: newUser.fb_id}, {upsert:true}, function(err, user) {
+    if (err) {
+      sendTextMessage(id, "There wan error subscribing you for daily articles");
+    } else {
+      console.log('User saved successfully!');
+      sendTextMessage(newUser.fb_id, "You've been subscribed!")
+    }
+  });
+}
+
+function unsubscribeUser(id) {
+  // call the built-in save method to save to the database
+  User.findOneAndRemove({fb_id: id}, function(err, user) {
+    if (err) {
+      sendTextMessage(id, "There wan error unsubscribing you for daily articles");
+    } else {
+      console.log('User deleted successfully!');
+      sendTextMessage(id, "You've been unsubscribed!")
+    }
+  });
+}
+
+function subscribeStatus(id) {
+  User.findOne({fb_id: id}, function(err, user) {
+    subscribeStatus = false
+    if (err) {
+      console.log(err)
+    } else {
+      if (user != null) {
+        subscribeStatus = true
+      }
+      subscribedText = "Your subscribed status is " + subscribeStatus
+      sendTextMessage(id, subscribedText)
+    }
+  })
+}
+
+exports.getArticles = function(callback) {
 	rssReader(properties.google_news_endpoint, function(err, articles) {
 		if (err) {
 			callback(err)
@@ -45,8 +115,47 @@ function getArticles(callback) {
 	})
 }
 
-function sendTextMessage(sender, article) {
+function sendTextMessage(recipientId, messageText) {
+  var messageData = {
+    recipient: {
+      id: recipientId
+    },
+    message: {
+      text: messageText
+    }
+  };
+
+  callSendAPI(messageData);
+}
+
+function callSendAPI(messageData) {
+  request({
+    uri: properties.facebook_message_endpoint,
+    qs: { access_token: properties.facebook_token },
+    method: 'POST',
+    json: messageData
+
+  }, function (error, response, body) {
+    if (!error && response.statusCode == 200) {
+      var recipientId = body.recipient_id;
+      var messageId = body.message_id;
+
+      console.log("Successfully sent generic message with id %s to recipient %s", 
+        messageId, recipientId);
+    } else {
+      console.error("Unable to send message.");
+      //console.error(response);
+      console.error(error);
+    }
+  });  
+}
+
+exports.sendArticleMessage = function(sender, article) {
   messageData = {
+    recipient: {
+      id: sender
+    },
+    message: {
     attachment:{
           type:"template",
           payload:{
@@ -60,20 +169,8 @@ function sendTextMessage(sender, article) {
         ]
         }
         }
+      }
   }
-  request({
-    url: properties.facebook_message_endpoint,
-    qs: {access_token:properties.facebook_token},
-    method: 'POST',
-    json: {
-      recipient: {id:sender},
-      message: messageData,
-    }
-  }, function(error, response, body) {
-    if (error) {
-      console.log('Error sending message: ', error);
-    } else if (response.body.error) {
-      console.log('Error: ', response.body.error);
-    }
-  });
+  
+  callSendAPI(messageData)
 }
