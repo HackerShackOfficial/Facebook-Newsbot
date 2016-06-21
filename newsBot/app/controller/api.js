@@ -23,7 +23,7 @@ exports.handleMessage = function(req, res) {
 		  	text = event.message.text;
 
         normalizedText = text.toLowerCase().replace(' ', '');
-
+        
 		  	// Handle a text message from this sender
         switch(normalizedText) {
           case "/subscribe":
@@ -36,22 +36,20 @@ exports.handleMessage = function(req, res) {
             subscribeStatus(sender)
             break;
           default:
-            getArticles(function(err, articles) {
+            _getArticles(function(err, articles) {
               if (err) {
                 console.log(err);
               }
               else if (normalizedText == "showmore") {
                 maxArticles = Math.min(articles.length, 5);
                 for (var i=0; i<maxArticles; i++) {
-                  sendArticleMessage(sender, articles[i])
+                  _sendArticleMessage(sender, articles[i])
                 }
               } else {
-                sendArticleMessage(sender, articles[0])
+                _sendArticleMessage(sender, articles[0])
               }
-            })
-            
-            break;
-        }
+             })
+          }
   		}
     }
 	res.sendStatus(200);
@@ -101,18 +99,22 @@ function subscribeStatus(id) {
   })
 }
 
+function _getArticles(callback) {
+  rssReader(properties.google_news_endpoint, function(err, articles) {
+    if (err) {
+      callback(err)
+    } else {
+      if (articles.length > 0) {
+        callback(null, articles)
+      } else {
+        callback("no articles received")
+      }
+    }
+  })
+}
+
 exports.getArticles = function(callback) {
-	rssReader(properties.google_news_endpoint, function(err, articles) {
-		if (err) {
-			callback(err)
-		} else {
-			if (articles.length > 0) {
-				callback(null, articles)
-			} else {
-				callback("no articles received")
-			}
-		}
-	})
+	_getArticles(callback)
 }
 
 function sendTextMessage(recipientId, messageText) {
@@ -143,6 +145,7 @@ function callSendAPI(messageData) {
       console.log("Successfully sent generic message with id %s to recipient %s", 
         messageId, recipientId);
     } else {
+      console.log(response.statusCode)
       console.error("Unable to send message.");
       //console.error(response);
       console.error(error);
@@ -150,7 +153,7 @@ function callSendAPI(messageData) {
   });  
 }
 
-exports.sendArticleMessage = function(sender, article) {
+function _sendArticleMessage(sender, article) {
   messageData = {
     recipient: {
       id: sender
@@ -173,4 +176,8 @@ exports.sendArticleMessage = function(sender, article) {
   }
   
   callSendAPI(messageData)
+}
+
+exports.sendArticleMessage = function(sender, article) {
+  _sendArticleMessage(sender, article)
 }
