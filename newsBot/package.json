@@ -16,6 +16,7 @@
     "mongoose": "^4.5.1",
     "morgan": "~1.6.1",
     "node-schedule": "^1.1.1",
+    "node-wit": "^4.0.0",
     "request": "^2.72.0",
     "rss-feed": "0.0.0",
     "serve-favicon": "~2.3.0"
